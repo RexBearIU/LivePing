@@ -46,19 +46,45 @@ jobs:
       - name: Run event bot loop (max 10 minutes)
         id: bot
         env:
-          EVENT_URL: ${{ inputs.event_url != '' && inputs.event_url || secrets.EVENT_URL }}
-          LOGIN_EMAIL: ${{ inputs.login_email != '' && inputs.login_email || secrets.LOGIN_EMAIL }}
-          LOGIN_PASSWORD: ${{ inputs.login_password != '' && inputs.login_password || secrets.LOGIN_PASSWORD }}
+          EVENT_URL: ${{ secrets.EVENT_URL }}
+          LOGIN_EMAIL: ${{ secrets.LOGIN_EMAIL }}
+          LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+          INPUT_EVENT_URL: ${{ inputs.event_url }}
+          INPUT_LOGIN_EMAIL: ${{ inputs.login_email }}
+          INPUT_LOGIN_PASSWORD: ${{ inputs.login_password }}
+          MAIL_TO_DEFAULT: ${{ secrets.MAIL_TO }}
+          INPUT_MAIL_TO: ${{ inputs.mail_to }}
         run: |
           set +e
           LOG_FILE="bot_output.log"
           : > "$LOG_FILE"
           
           start_time=$(date +%s)
-          deadline=$((start_time + 600))
+          MAX_RUNTIME_SECONDS=600
+          SLEEP_SECONDS=300
+          deadline=$((start_time + MAX_RUNTIME_SECONDS))
           iteration=1
           success_iteration=""
           last_exit=0
+          MAIL_TO_VALUE=$MAIL_TO_DEFAULT
+          
+          if [ -n "${INPUT_EVENT_URL// }" ]; then
+            export EVENT_URL="$INPUT_EVENT_URL"
+          fi
+          
+          if [ -n "${INPUT_LOGIN_EMAIL// }" ]; then
+            export LOGIN_EMAIL="$INPUT_LOGIN_EMAIL"
+          fi
+          
+          if [ -n "${INPUT_LOGIN_PASSWORD// }" ]; then
+            export LOGIN_PASSWORD="$INPUT_LOGIN_PASSWORD"
+          fi
+          
+          if [ -n "${INPUT_MAIL_TO// }" ]; then
+            MAIL_TO_VALUE="$INPUT_MAIL_TO"
+          fi
+          
+          echo "MAIL_TO_VALUE=$MAIL_TO_VALUE" >> "$GITHUB_ENV"
           
           echo "Starting event bot loop for up to 10 minutes..." | tee -a "$LOG_FILE"
           
@@ -75,13 +101,13 @@ jobs:
             fi
             
             now=$(date +%s)
-            if [ $((now + 300)) -ge "$deadline" ]; then
+            if [ $((now + SLEEP_SECONDS)) -ge "$deadline" ]; then
               echo "Time limit reached or not enough time for another run. Stopping loop." | tee -a "$LOG_FILE"
               break
             fi
             
             echo "Sleeping 5 minutes before next attempt..." | tee -a "$LOG_FILE"
-            sleep 300
+            sleep "$SLEEP_SECONDS"
             iteration=$((iteration + 1))
           done
           
@@ -113,7 +139,7 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: 'LivePing Bot: ${{ steps.bot.outputs.status == ''success'' && ''✅ Bought successfully'' || ''❌ Purchase failed'' }}'
-          to: ${{ inputs.mail_to != '' && inputs.mail_to || secrets.MAIL_TO }}
+          to: ${{ env.MAIL_TO_VALUE }}
           from: LivePing Bot <${{ secrets.MAIL_USERNAME }}>
           body: |
             LivePing Bot Execution Report
