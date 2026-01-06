@@ -1,0 +1,83 @@
+name: LivePing Event Bot
+
+on:
+  schedule:
+    # Run every minute
+    - cron: '* * * * *'
+  workflow_dispatch: # Allow manual trigger
+  
+permissions:
+  contents: read
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+      
+      - name: Run event bot
+        id: bot
+        env:
+          EVENT_URL: ${{ secrets.EVENT_URL }}
+          LOGIN_EMAIL: ${{ secrets.LOGIN_EMAIL }}
+          LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+        run: |
+          set +e
+          npm run bot > bot_output.log 2>&1
+          BOT_EXIT_CODE=$?
+          cat bot_output.log
+          
+          if [ $BOT_EXIT_CODE -eq 0 ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=Bought successfully" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "message=Purchase failed" >> $GITHUB_OUTPUT
+          fi
+          
+          # Save log for email
+          echo "BOT_LOG<<EOF" >> $GITHUB_ENV
+          cat bot_output.log >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          exit $BOT_EXIT_CODE
+        continue-on-error: true
+      
+      - name: Send email notification
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: 'LivePing Bot: ${{ steps.bot.outputs.status == ''success'' && ''✅ Bought successfully'' || ''❌ Purchase failed'' }}'
+          to: ${{ secrets.MAIL_TO }}
+          from: LivePing Bot <${{ secrets.MAIL_USERNAME }}>
+          body: |
+            LivePing Bot Execution Report
+            =============================
+            
+            Status: ${{ steps.bot.outputs.status == 'success' && '✅ SUCCESS' || '❌ FAILED' }}
+            Message: ${{ steps.bot.outputs.message }}
+            
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Bot Output Log:
+            ---------------
+            ${{ env.BOT_LOG }}
+          priority: high
