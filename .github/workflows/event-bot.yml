@@ -93,6 +93,7 @@ jobs:
             MAIL_TO_VALUE="$INPUT_MAIL_TO"
           fi
           
+          # Strip newline characters to avoid breaking subsequent environment parsing.
           MAIL_TO_VALUE=${MAIL_TO_VALUE//$'\n'/}
           MAIL_TO_VALUE=${MAIL_TO_VALUE//$'\r'/}
           echo "MAIL_TO_VALUE=$MAIL_TO_VALUE" >> "$GITHUB_ENV"
@@ -133,7 +134,7 @@ jobs:
             final_exit=$last_exit
           fi
           
-          plural_suffix=$([ $runs -ne 1 ] && echo s)
+          plural_suffix=$([ $runs -eq 1 ] && echo '' || echo s)
           echo "Loop complete after $runs iteration${plural_suffix}. Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
           echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
