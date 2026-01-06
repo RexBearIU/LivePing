@@ -77,11 +77,11 @@ jobs:
             [[ -n "$value" ]]
           }
           
-          if has_content "${INPUT_EVENT_URL:-}" && [[ "$INPUT_EVENT_URL" =~ ^https?:// ]]; then
+          if has_content "${INPUT_EVENT_URL:-}" && [[ "$INPUT_EVENT_URL" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/.*)?$ ]]; then
             export EVENT_URL="$INPUT_EVENT_URL"
           fi
           
-          if has_content "${INPUT_LOGIN_EMAIL:-}"; then
+          if has_content "${INPUT_LOGIN_EMAIL:-}" && [[ "$INPUT_LOGIN_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
             export LOGIN_EMAIL="$INPUT_LOGIN_EMAIL"
           fi
           
@@ -89,7 +89,7 @@ jobs:
             export LOGIN_PASSWORD="$INPUT_LOGIN_PASSWORD"
           fi
           
-          if has_content "${INPUT_MAIL_TO:-}"; then
+          if has_content "${INPUT_MAIL_TO:-}" && [[ "$INPUT_MAIL_TO" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
             MAIL_TO_VALUE="$INPUT_MAIL_TO"
           fi
           
@@ -114,6 +114,10 @@ jobs:
             fi
             
             now=$(date +%s)
+            if [ "$now" -ge "$deadline" ]; then
+              echo "Time limit reached after iteration $iteration. Stopping loop." | tee -a "$LOG_FILE"
+              break
+            fi
             if [ $((now + SLEEP_DURATION_SECONDS)) -ge "$deadline" ]; then
               echo "Time limit reached or not enough time for another run. Stopping loop." | tee -a "$LOG_FILE"
               break
