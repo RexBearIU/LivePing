@@ -69,19 +69,26 @@ jobs:
           runs=0
           MAIL_TO_VALUE=$MAIL_TO_DEFAULT
           
-          if [[ "${INPUT_EVENT_URL:-}" =~ [^[:space:]] ]]; then
+          has_content() {
+            local value="$1"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            [[ -n "$value" ]]
+          }
+          
+          if has_content "${INPUT_EVENT_URL:-}"; then
             export EVENT_URL="$INPUT_EVENT_URL"
           fi
           
-          if [[ "${INPUT_LOGIN_EMAIL:-}" =~ [^[:space:]] ]]; then
+          if has_content "${INPUT_LOGIN_EMAIL:-}"; then
             export LOGIN_EMAIL="$INPUT_LOGIN_EMAIL"
           fi
           
-          if [[ "${INPUT_LOGIN_PASSWORD:-}" =~ [^[:space:]] ]]; then
+          if has_content "${INPUT_LOGIN_PASSWORD:-}"; then
             export LOGIN_PASSWORD="$INPUT_LOGIN_PASSWORD"
           fi
           
-          if [[ "${INPUT_MAIL_TO:-}" =~ [^[:space:]] ]]; then
+          if has_content "${INPUT_MAIL_TO:-}"; then
             MAIL_TO_VALUE="$INPUT_MAIL_TO"
           fi
           
@@ -123,7 +130,12 @@ jobs:
             final_exit=$last_exit
           fi
           
-          echo "Loop complete after $runs iteration(s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
+          plural_suffix=""
+          if [ "$runs" -ne 1 ]; then
+            plural_suffix="s"
+          fi
+          
+          echo "Loop complete after $runs iteration${plural_suffix}. Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
           echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
           cat "$LOG_FILE" >> "$GITHUB_ENV"
