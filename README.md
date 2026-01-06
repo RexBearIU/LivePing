@@ -5,7 +5,7 @@ A CI/CD-ready Playwright bot that automates event seat booking. Runs on GitHub A
 ## Features
 
 - 🤖 **Automated Booking**: Playwright-powered browser automation for seat selection
-- ⏰ **Scheduled Execution**: Runs every minute via GitHub Actions cron
+- ⏰ **Workflow Dispatch**: Manual trigger with optional start time guard
 - 📧 **Email Notifications**: Sends results (success/failure) via email
 - 🔒 **Secure**: Uses GitHub Secrets for credentials
 - 🚀 **Zero Infrastructure**: Runs entirely on GitHub Actions
@@ -31,7 +31,6 @@ npm run install-playwright
 Go to your repository settings → Secrets and variables → Actions, and add:
 
 #### Required Secrets:
-- `EVENT_URL`: URL of the event page to monitor
 - `LOGIN_EMAIL`: Login email/username for the event platform
 - `LOGIN_PASSWORD`: Login password for the event platform
 
@@ -51,9 +50,10 @@ Go to your repository settings → Secrets and variables → Actions, and add:
 Test the bot locally before deploying:
 
 ```bash
-export EVENT_URL="https://your-event-page.com"
+export TARGET_URL="https://your-event-page.com"
 export LOGIN_EMAIL="your-email@example.com"
 export LOGIN_PASSWORD="your-password"
+export START_TIME="2026-01-06T16:00:00Z" # optional
 
 npm run bot
 ```
@@ -61,20 +61,21 @@ npm run bot
 ## How It Works
 
 1. **Launch**: Chromium browser launches in headless mode
-2. **Navigate**: Goes to the configured event URL
-3. **Login**: Attempts to login using provided credentials
-4. **Select Seat**: Searches for available seats and attempts to select one
-5. **Checkout**: Attempts to complete the checkout process
-6. **Result**: Logs "Bought successfully" or "Purchase failed"
-7. **Notify**: Sends email notification with the result
+2. **Start Guard**: Exits early if the provided `start_time` has not been reached
+3. **Navigate**: Goes to the configured event URL
+4. **Login**: Attempts to login using provided credentials
+5. **Select Seat**: Searches for available seats and attempts to select one
+6. **Checkout**: Attempts to complete the checkout process
+7. **Result**: Logs "Bought successfully" or "Purchase failed"
+8. **Notify**: Sends email notification with the result
 
-## Workflow Schedule
+## Workflow Trigger
 
-The GitHub Actions workflow runs:
-- **Every minute** via cron: `* * * * *`
-- **Manually** via workflow_dispatch (Actions tab → Run workflow)
+Use **Actions → LivePing Manual Runner → Run workflow** and provide:
+- `target_url` (required): Event page to monitor
+- `start_time` (optional): ISO timestamp (UTC). The bot exits early until this time.
 
-⚠️ **Note**: Running every minute may be aggressive for some event platforms. Consider adjusting to a more conservative schedule (e.g., every 5-10 minutes) to avoid rate limiting or IP blocking. See the Customization section below.
+The workflow loops for up to 10 minutes, retrying every 5 minutes until a success occurs.
 
 ## Customization
 
@@ -88,12 +89,7 @@ Edit `scripts/eventBot.ts` to customize:
 
 ### Adjust Schedule
 
-Edit `.github/workflows/event-bot.yml`:
-```yaml
-schedule:
-  - cron: '*/5 * * * *'  # Every 5 minutes
-  - cron: '0 * * * *'    # Every hour
-```
+Edit `.github/workflows/liveping.yml` to change the loop duration or sleep interval.
 
 ## Security Notes
 
