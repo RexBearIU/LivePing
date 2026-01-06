@@ -54,6 +54,7 @@ export TARGET_URL="https://your-event-page.com"
 export LOGIN_EMAIL="your-email@example.com"
 export LOGIN_PASSWORD="your-password"
 export START_TIME="2026-01-06T16:00:00Z" # optional
+# export HEADLESS=false # optional: view the browser locally (defaults to true, including in CI)
 
 npm run bot
 ```

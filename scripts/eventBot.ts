@@ -33,9 +33,11 @@ async function main() {
     console.log(`📍 Event URL: ${TARGET_URL}`);
     console.log(`🔧 Using helper: ${helper.name}`);
 
-    console.log('🚀 Launching Chromium browser...');
+    const headless = (process.env.HEADLESS ?? 'true').toLowerCase() !== 'false';
+
+    console.log(`🚀 Launching Chromium browser (headless=${headless})...`);
     browser = await chromium.launch({
-      headless: true,
+      headless,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
