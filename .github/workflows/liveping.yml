@@ -13,10 +13,16 @@ on:
         default: ""
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      LOOP_WINDOW_SECONDS: 600
+      LOOP_SLEEP_SECONDS: 300
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +47,7 @@ jobs:
           LOGIN_EMAIL: ${{ secrets.LOGIN_EMAIL }}
           LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
         run: |
-          end=$(( $(date +%s) + 600 ))
+          end=$(( $(date +%s) + ${LOOP_WINDOW_SECONDS:-600} ))
           status="failure"
           message="Purchase failed"
           attempt=1
@@ -65,7 +71,7 @@ jobs:
               break
             fi
             echo "Sleeping 5 minutes before next attempt..."
-            sleep 300
+            sleep "${LOOP_SLEEP_SECONDS:-300}"
             attempt=$((attempt + 1))
           done
           echo "last_status=${status}" >> "$GITHUB_OUTPUT"

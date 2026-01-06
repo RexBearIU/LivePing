@@ -26,8 +26,6 @@ const loginSelectors = {
 const seatSelectors = {
   seats: [
     '.zone .area-list button:not([disabled])',
-    'button:has-text("立即購票")',
-    'a:has-text("立即購票")',
     '.seat.available'
   ],
   bookingButtons: ['button:has-text("立即購票")', 'a:has-text("立即購票")']

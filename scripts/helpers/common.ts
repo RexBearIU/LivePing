@@ -4,6 +4,7 @@ export interface LoginSelectors {
   loginButtons?: string[];
   emailInputs?: string[];
   submitButtons?: string[];
+  passwordInputs?: string[];
 }
 
 export interface SeatSelectors {
@@ -51,6 +52,12 @@ const defaultLoginSelectors: Required<LoginSelectors> = {
     'button:has-text("Sign in")',
     'button:has-text("Log in")',
     'input[type="submit"]'
+  ],
+  passwordInputs: [
+    'input[type="password"]',
+    'input[name="password"]',
+    '#password',
+    '#pwd'
   ]
 };
 
@@ -105,6 +112,7 @@ export async function performLogin(
   const loginSelectors = overrides.loginButtons ?? defaultLoginSelectors.loginButtons;
   const emailSelectors = overrides.emailInputs ?? defaultLoginSelectors.emailInputs;
   const submitSelectors = overrides.submitButtons ?? defaultLoginSelectors.submitButtons;
+  const passwordSelectors = overrides.passwordInputs ?? defaultLoginSelectors.passwordInputs;
 
   try {
     let loginButtonFound = false;
@@ -126,6 +134,7 @@ export async function performLogin(
     }
 
     await page.waitForTimeout(1000);
+    const loginFormExpected = loginButtonFound;
 
     let emailInput = null;
     for (const selector of emailSelectors) {
@@ -141,15 +150,41 @@ export async function performLogin(
     }
 
     if (!emailInput) {
-      console.log('⚠️ Email input not found, may already be logged in');
+      console.log('⚠️ Email input not found');
+      if (loginFormExpected) {
+        console.log('❌ Login form not available after clicking login prompt');
+        return false;
+      }
+      console.log('ℹ️ Assuming session already authenticated');
       return true;
     }
 
     await emailInput.fill(email);
     console.log('📧 Email entered');
 
-    const passwordInput = page.locator('input[type="password"]').first();
-    await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    let passwordInput = null;
+    for (const selector of passwordSelectors) {
+      try {
+        const input = page.locator(selector).first();
+        if (await input.isVisible({ timeout: 2000 })) {
+          passwordInput = input;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (!passwordInput) {
+      console.log('⚠️ Password input not found');
+      if (loginFormExpected) {
+        console.log('❌ Login form incomplete after invoking login prompt');
+        return false;
+      }
+      console.log('ℹ️ Assuming session already authenticated');
+      return true;
+    }
+
     await passwordInput.fill(password);
     console.log('🔑 Password entered');
 
@@ -242,6 +277,7 @@ export async function performCheckout(
             }
           }
 
+          console.log('⚠️ Checkout action completed but no confirmation detected');
           return true;
         }
       } catch {

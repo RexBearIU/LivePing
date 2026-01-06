@@ -2,14 +2,15 @@ import { chromium, Browser } from 'playwright';
 import { getHelperForUrl } from './helpers/siteRouter';
 import { hasStartTimePassed } from './helpers/time';
 
+const EXIT_CODE_START_TIME_NOT_REACHED = 3;
+
 async function main() {
   let browser: Browser | null = null;
 
   try {
     console.log('🤖 Starting LivePing Bot...');
 
-    const TARGET_URL =
-      process.env.TARGET_URL || process.env.EVENT_URL || 'https://example.com/event';
+    const TARGET_URL = process.env.TARGET_URL || process.env.EVENT_URL;
     const START_TIME = process.env.START_TIME;
     const LOGIN_EMAIL = process.env.LOGIN_EMAIL;
     const LOGIN_PASSWORD = process.env.LOGIN_PASSWORD;
@@ -23,7 +24,7 @@ async function main() {
     }
 
     if (!hasStartTimePassed(START_TIME)) {
-      process.exitCode = 3;
+      process.exitCode = EXIT_CODE_START_TIME_NOT_REACHED;
       return;
     }
 
