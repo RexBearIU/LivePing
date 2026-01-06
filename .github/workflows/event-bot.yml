@@ -66,21 +66,22 @@ jobs:
           iteration=1
           success_iteration=""
           last_exit=0
+          runs=0
           MAIL_TO_VALUE=$MAIL_TO_DEFAULT
           
-          if [ -n "${INPUT_EVENT_URL// }" ]; then
+          if [[ "${INPUT_EVENT_URL:-}" =~ [^[:space:]] ]]; then
             export EVENT_URL="$INPUT_EVENT_URL"
           fi
           
-          if [ -n "${INPUT_LOGIN_EMAIL// }" ]; then
+          if [[ "${INPUT_LOGIN_EMAIL:-}" =~ [^[:space:]] ]]; then
             export LOGIN_EMAIL="$INPUT_LOGIN_EMAIL"
           fi
           
-          if [ -n "${INPUT_LOGIN_PASSWORD// }" ]; then
+          if [[ "${INPUT_LOGIN_PASSWORD:-}" =~ [^[:space:]] ]]; then
             export LOGIN_PASSWORD="$INPUT_LOGIN_PASSWORD"
           fi
           
-          if [ -n "${INPUT_MAIL_TO// }" ]; then
+          if [[ "${INPUT_MAIL_TO:-}" =~ [^[:space:]] ]]; then
             MAIL_TO_VALUE="$INPUT_MAIL_TO"
           fi
           
@@ -95,6 +96,7 @@ jobs:
             npm run bot >> "$LOG_FILE" 2>&1
             last_exit=$?
             echo "Iteration $iteration exit code: $last_exit" | tee -a "$LOG_FILE"
+            runs=$((runs + 1))
             
             if [ "$last_exit" -eq 0 ] && [ -z "$success_iteration" ]; then
               success_iteration=$iteration
@@ -121,7 +123,7 @@ jobs:
             final_exit=$last_exit
           fi
           
-          echo "Loop complete after $iteration iteration(s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
+          echo "Loop complete after $runs iteration(s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
           echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
           cat "$LOG_FILE" >> "$GITHUB_ENV"
