@@ -65,7 +65,7 @@ jobs:
           MAX_RUNTIME_MINUTES=$((MAX_RUNTIME_SECONDS / 60))
           SLEEP_DURATION_MINUTES=$((SLEEP_DURATION_SECONDS / 60))
           deadline=$((start_time + MAX_RUNTIME_SECONDS))
-          EMAIL_REGEX='^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
+          EMAIL_REGEX='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
           iteration=1
           success_iteration=""
           last_exit=0
@@ -80,7 +80,9 @@ jobs:
             [[ -n "$value" ]]
           }
           
-          if has_content "${INPUT_EVENT_URL:-}" && [[ "$INPUT_EVENT_URL" =~ ^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
+          if has_content "${INPUT_EVENT_URL:-}" \
+            && [[ "$INPUT_EVENT_URL" =~ ^https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]] \
+            && [[ ! "$INPUT_EVENT_URL" =~ ^https?://(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
             export EVENT_URL="$INPUT_EVENT_URL"
           fi
           
