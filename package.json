@@ -1,0 +1,27 @@
+{
+  "name": "liveping",
+  "version": "1.0.0",
+  "description": "A CI/CD‑ready Playwright bot that watches event pages and pings when seats open",
+  "main": "scripts/eventBot.ts",
+  "scripts": {
+    "bot": "tsx scripts/eventBot.ts",
+    "install-playwright": "playwright install chromium"
+  },
+  "keywords": [
+    "playwright",
+    "bot",
+    "automation",
+    "event-booking"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.49.1",
+    "playwright": "^1.49.1",
+    "tsx": "^4.19.2"
+  }
+}
