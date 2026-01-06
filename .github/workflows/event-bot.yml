@@ -1,10 +1,24 @@
 name: LivePing Event Bot
 
 on:
-  schedule:
-    # Run every minute
-    - cron: '* * * * *'
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      event_url:
+        description: "Event URL override (defaults to secret EVENT_URL)"
+        required: false
+        type: string
+      login_email:
+        description: "Login email override (defaults to secret LOGIN_EMAIL)"
+        required: false
+        type: string
+      login_password:
+        description: "Login password override (defaults to secret LOGIN_PASSWORD)"
+        required: false
+        type: string
+      mail_to:
+        description: "Notification recipient override (defaults to secret MAIL_TO)"
+        required: false
+        type: string
   
 permissions:
   contents: read
@@ -29,32 +43,65 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
       
-      - name: Run event bot
+      - name: Run event bot loop (max 10 minutes)
         id: bot
         env:
-          EVENT_URL: ${{ secrets.EVENT_URL }}
-          LOGIN_EMAIL: ${{ secrets.LOGIN_EMAIL }}
-          LOGIN_PASSWORD: ${{ secrets.LOGIN_PASSWORD }}
+          EVENT_URL: ${{ inputs.event_url != '' && inputs.event_url || secrets.EVENT_URL }}
+          LOGIN_EMAIL: ${{ inputs.login_email != '' && inputs.login_email || secrets.LOGIN_EMAIL }}
+          LOGIN_PASSWORD: ${{ inputs.login_password != '' && inputs.login_password || secrets.LOGIN_PASSWORD }}
         run: |
           set +e
-          npm run bot > bot_output.log 2>&1
-          BOT_EXIT_CODE=$?
-          cat bot_output.log
+          LOG_FILE="bot_output.log"
+          : > "$LOG_FILE"
           
-          if [ $BOT_EXIT_CODE -eq 0 ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=Bought successfully" >> $GITHUB_OUTPUT
+          start_time=$(date +%s)
+          deadline=$((start_time + 600))
+          iteration=1
+          success_iteration=""
+          last_exit=0
+          
+          echo "Starting event bot loop for up to 10 minutes..." | tee -a "$LOG_FILE"
+          
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            now_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            echo "----- Iteration $iteration ($now_utc) -----" | tee -a "$LOG_FILE"
+            
+            npm run bot >> "$LOG_FILE" 2>&1
+            last_exit=$?
+            echo "Iteration $iteration exit code: $last_exit" | tee -a "$LOG_FILE"
+            
+            if [ "$last_exit" -eq 0 ] && [ -z "$success_iteration" ]; then
+              success_iteration=$iteration
+            fi
+            
+            now=$(date +%s)
+            if [ $((now + 300)) -ge "$deadline" ]; then
+              echo "Time limit reached or not enough time for another run. Stopping loop." | tee -a "$LOG_FILE"
+              break
+            fi
+            
+            echo "Sleeping 5 minutes before next attempt..." | tee -a "$LOG_FILE"
+            sleep 300
+            iteration=$((iteration + 1))
+          done
+          
+          if [ -n "$success_iteration" ]; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            echo "message=Succeeded on iteration $success_iteration" >> "$GITHUB_OUTPUT"
+            final_exit=0
           else
-            echo "status=failed" >> $GITHUB_OUTPUT
-            echo "message=Purchase failed" >> $GITHUB_OUTPUT
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            echo "message=All attempts failed within 10 minutes" >> "$GITHUB_OUTPUT"
+            final_exit=$last_exit
           fi
           
-          # Save log for email
-          echo "BOT_LOG<<EOF" >> $GITHUB_ENV
-          cat bot_output.log >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "Loop complete after $iteration iteration(s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
-          exit $BOT_EXIT_CODE
+          echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
+          cat "$LOG_FILE" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+          
+          exit $final_exit
         continue-on-error: true
       
       - name: Send email notification
@@ -66,7 +113,7 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: 'LivePing Bot: ${{ steps.bot.outputs.status == ''success'' && ''✅ Bought successfully'' || ''❌ Purchase failed'' }}'
-          to: ${{ secrets.MAIL_TO }}
+          to: ${{ inputs.mail_to != '' && inputs.mail_to || secrets.MAIL_TO }}
           from: LivePing Bot <${{ secrets.MAIL_USERNAME }}>
           body: |
             LivePing Bot Execution Report
