@@ -35,7 +35,9 @@ Go to your repository settings → Secrets and variables → Actions, and add:
 - `LOGIN_PASSWORD`: Login password for the event platform
 
 #### Optional Notification Variable:
-- `NOTIFY_USERS` (Repository variable): Space-separated GitHub usernames or teams (e.g., `@your-username @org/team`) to mention in the notification issue. Mentions leverage GitHub notifications (including email, based on each user's settings).
+- `NOTIFY_USERS` (Repository variable): Space-separated GitHub usernames or teams (e.g., `username1 username2 org/team-name`, rendered as `@username1 @username2 @org/team-name`).
+  The workflow normalizes usernames (strips leading `@`, adds it back) and mentions them in the notification issue
+  (GitHub notifications/email settings apply).
 
 ### 4. Enable GitHub Actions
 
@@ -107,7 +109,7 @@ Edit `.github/workflows/liveping.yml` to change the loop duration or sleep inter
 ### Notifications not arriving
 - Ensure the users listed in `NOTIFY_USERS` have access to the repo
 - Users must watch the repository or have GitHub notifications enabled for issue creations/mentions
-- Check that `NOTIFY_USERS` uses valid GitHub handles (include the `@` prefix)
+- Check that `NOTIFY_USERS` uses valid GitHub usernames/teams (prefix not required; it is added automatically)
 
 ### Seats not found
 - The bot looks for common seat selector patterns

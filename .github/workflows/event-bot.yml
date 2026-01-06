@@ -8,6 +8,7 @@ on:
   
 permissions:
   contents: read
+  issues: write
 
 jobs:
   run-bot:
@@ -67,33 +68,27 @@ jobs:
           NOTIFY_USERS: ${{ vars.NOTIFY_USERS }}
         with:
           script: |
-            const status = process.env.STATUS || 'unknown';
-            const message = process.env.MESSAGE || 'No message';
-            const log = process.env.BOT_LOG || 'No log output captured.';
-            const mentions = (process.env.NOTIFY_USERS || '').trim();
+            const path = require('path');
+            const workspace = process.env.GITHUB_WORKSPACE;
 
-            const title = `LivePing Bot: ${status === 'success' ? '✅ Bought successfully' : '❌ Purchase failed'}`;
-            const lines = [
-              'LivePing Bot Execution Report',
-              '=============================',
-              '',
-              `Status: ${status === 'success' ? '✅ SUCCESS' : '❌ FAILED'}`,
-              `Message: ${message}`,
-              '',
-              `Workflow Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              '',
-              'Bot Output Log:',
-              '---------------',
-              log
-            ];
-
-            if (mentions) {
-              lines.push('', `Notify: ${mentions}`);
+            if (!workspace) {
+              throw new Error('GITHUB_WORKSPACE is not set');
             }
 
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body: lines.join('\n')
+            let notifyIssue;
+            try {
+              notifyIssue = require(path.join(workspace, 'scripts', 'notifyIssue'));
+            } catch (error) {
+              throw new Error(`Failed to load notifyIssue helper: ${error}`);
+            }
+
+            await notifyIssue({
+              github,
+              context,
+              status: process.env.STATUS || 'unknown',
+              message: process.env.MESSAGE || 'No message',
+              log: process.env.BOT_LOG || 'No log output captured.',
+              notifyUsers: process.env.NOTIFY_USERS,
+              successTitle: 'LivePing Bot: ✅ Bought successfully',
+              failureTitle: 'LivePing Bot: ❌ Purchase failed'
             });

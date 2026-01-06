@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   run-bot:
@@ -80,7 +81,7 @@ jobs:
             exit 1
           fi
 
-      - name: Send email notification
+      - name: Publish GitHub notification
         if: always() && steps.run-bot.outputs.last_status != ''
         uses: actions/github-script@v7
         env:
@@ -91,30 +92,28 @@ jobs:
           NOTIFY_USERS: ${{ vars.NOTIFY_USERS }}
         with:
           script: |
-            const status = process.env.LAST_STATUS || 'unknown';
-            const message = process.env.LAST_MESSAGE || 'No message';
-            const target = process.env.TARGET_URL || 'N/A';
-            const start = process.env.START_TIME || 'N/A';
-            const mentions = (process.env.NOTIFY_USERS || '').trim();
+            const path = require('path');
+            const workspace = process.env.GITHUB_WORKSPACE;
 
-            const title = `LivePing Bot: ${status === 'success' ? '✅ Success' : '❌ Failure'}`;
-            const lines = [
-              'LivePing Bot Execution Report',
-              '',
-              `Status: ${status}`,
-              `Message: ${message}`,
-              `Target URL: ${target}`,
-              `Start Time: ${start}`,
-              `Workflow Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            ];
-
-            if (mentions) {
-              lines.push('', `Notify: ${mentions}`);
+            if (!workspace) {
+              throw new Error('GITHUB_WORKSPACE is not set');
             }
 
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body: lines.join('\n')
+            let notifyIssue;
+            try {
+              notifyIssue = require(path.join(workspace, 'scripts', 'notifyIssue'));
+            } catch (error) {
+              throw new Error(`Failed to load notifyIssue helper: ${error}`);
+            }
+
+            await notifyIssue({
+              github,
+              context,
+              status: process.env.LAST_STATUS || 'unknown',
+              message: process.env.LAST_MESSAGE || 'No message',
+              targetUrl: process.env.TARGET_URL || '',
+              startTime: process.env.START_TIME || '',
+              notifyUsers: process.env.NOTIFY_USERS,
+              successTitle: 'LivePing Bot: ✅ Success',
+              failureTitle: 'LivePing Bot: ❌ Failure'
             });
