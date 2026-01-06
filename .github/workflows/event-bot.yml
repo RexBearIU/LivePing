@@ -62,6 +62,8 @@ jobs:
           start_time=$(date +%s)
           MAX_RUNTIME_SECONDS=600
           SLEEP_DURATION_SECONDS=300
+          MAX_RUNTIME_MINUTES=$((MAX_RUNTIME_SECONDS / 60))
+          SLEEP_DURATION_MINUTES=$((SLEEP_DURATION_SECONDS / 60))
           deadline=$((start_time + MAX_RUNTIME_SECONDS))
           EMAIL_REGEX='^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
           iteration=1
@@ -99,7 +101,7 @@ jobs:
           MAIL_TO_VALUE=${MAIL_TO_VALUE//$'\r'/}
           echo "MAIL_TO_VALUE=$MAIL_TO_VALUE" >> "$GITHUB_ENV"
           
-          echo "Starting event bot loop for up to 10 minutes..." | tee -a "$LOG_FILE"
+          echo "Starting event bot loop for up to $MAX_RUNTIME_MINUTES minutes..." | tee -a "$LOG_FILE"
           
           while true; do
             loop_start=$(date +%s)
@@ -130,7 +132,7 @@ jobs:
               break
             fi
             
-            echo "Sleeping 5 minutes before next attempt..." | tee -a "$LOG_FILE"
+            echo "Sleeping $SLEEP_DURATION_MINUTES minutes before next attempt..." | tee -a "$LOG_FILE"
             sleep "$SLEEP_DURATION_SECONDS"
             iteration=$((iteration + 1))
           done
@@ -141,7 +143,7 @@ jobs:
             final_exit=0
           else
             echo "status=failed" >> "$GITHUB_OUTPUT"
-            echo "message=All attempts failed within 10 minutes" >> "$GITHUB_OUTPUT"
+            echo "message=All attempts failed within $MAX_RUNTIME_MINUTES minutes" >> "$GITHUB_OUTPUT"
             final_exit=$last_exit
           fi
           
