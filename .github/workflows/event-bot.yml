@@ -77,7 +77,7 @@ jobs:
             [[ -n "$value" ]]
           }
           
-          if has_content "${INPUT_EVENT_URL:-}"; then
+          if has_content "${INPUT_EVENT_URL:-}" && [[ "$INPUT_EVENT_URL" =~ ^https?:// ]]; then
             export EVENT_URL="$INPUT_EVENT_URL"
           fi
           
@@ -93,6 +93,8 @@ jobs:
             MAIL_TO_VALUE="$INPUT_MAIL_TO"
           fi
           
+          MAIL_TO_VALUE=${MAIL_TO_VALUE//$'\n'/}
+          MAIL_TO_VALUE=${MAIL_TO_VALUE//$'\r'/}
           echo "MAIL_TO_VALUE=$MAIL_TO_VALUE" >> "$GITHUB_ENV"
           
           echo "Starting event bot loop for up to 10 minutes..." | tee -a "$LOG_FILE"
@@ -131,7 +133,8 @@ jobs:
             final_exit=$last_exit
           fi
           
-          echo "Loop complete after $runs iteration$([ $runs -ne 1 ] && echo s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
+          plural_suffix=$([ $runs -ne 1 ] && echo s)
+          echo "Loop complete after $runs iteration${plural_suffix}. Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
           echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
           cat "$LOG_FILE" >> "$GITHUB_ENV"
