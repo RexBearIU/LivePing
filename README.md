@@ -6,7 +6,7 @@ A CI/CD-ready Playwright bot that automates event seat booking. Runs on GitHub A
 
 - 🤖 **Automated Booking**: Playwright-powered browser automation for seat selection
 - ⏰ **Workflow Dispatch**: Manual trigger with optional start time guard
-- 📧 **Email Notifications**: Sends results (success/failure) via email
+- 📧 **GitHub Notifications**: Posts results (success/failure) using GitHub issues/notifications
 - 🔒 **Secure**: Uses GitHub Secrets for credentials
 - 🚀 **Zero Infrastructure**: Runs entirely on GitHub Actions
 
@@ -34,10 +34,10 @@ Go to your repository settings → Secrets and variables → Actions, and add:
 - `LOGIN_EMAIL`: Login email/username for the event platform
 - `LOGIN_PASSWORD`: Login password for the event platform
 
-#### Email Notification Secrets:
-- `MAIL_USERNAME`: SMTP username (e.g., your Gmail address)
-- `MAIL_PASSWORD`: SMTP password (for Gmail, use an [App Password](https://support.google.com/accounts/answer/185833))
-- `MAIL_TO`: Email address to receive notifications
+#### Optional Notification Variable:
+- `NOTIFY_USERS` (Repository variable): Space-separated GitHub usernames or teams (e.g., `username1 username2 org/team-name`, rendered as `@username1 @username2 @org/team-name`).
+  The workflow normalizes usernames (strips leading `@`, adds it back) and mentions them in the notification issue
+  (GitHub notifications/email settings apply).
 
 ### 4. Enable GitHub Actions
 
@@ -68,7 +68,7 @@ npm run bot
 5. **Select Seat**: Searches for available seats and attempts to select one
 6. **Checkout**: Attempts to complete the checkout process
 7. **Result**: Logs "Bought successfully" or "Purchase failed"
-8. **Notify**: Sends email notification with the result
+8. **Notify**: Creates a GitHub issue notification with the result (mentions `NOTIFY_USERS` if set)
 
 ## Workflow Trigger
 
@@ -106,10 +106,10 @@ Edit `.github/workflows/liveping.yml` to change the loop duration or sleep inter
 - Check if the event platform uses CAPTCHA (may need additional handling)
 - Review bot logs in Actions tab
 
-### Email notifications not working
-- Verify all `MAIL_*` secrets are configured
-- For Gmail, ensure "Less secure app access" is enabled OR use App Password
-- Check SMTP server settings
+### Notifications not arriving
+- Ensure the users listed in `NOTIFY_USERS` have access to the repo
+- Users must watch the repository or have GitHub notifications enabled for issue creations/mentions
+- Check that `NOTIFY_USERS` uses valid GitHub usernames/teams (prefix not required; it is added automatically)
 
 ### Seats not found
 - The bot looks for common seat selector patterns
