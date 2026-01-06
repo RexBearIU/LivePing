@@ -57,27 +57,43 @@ jobs:
           exit $BOT_EXIT_CODE
         continue-on-error: true
       
-      - name: Send email notification
+      - name: Publish GitHub notification
         if: always()
-        uses: dawidd6/action-send-mail@v3
+        uses: actions/github-script@v7
+        env:
+          STATUS: ${{ steps.bot.outputs.status }}
+          MESSAGE: ${{ steps.bot.outputs.message }}
+          BOT_LOG: ${{ env.BOT_LOG }}
+          NOTIFY_USERS: ${{ vars.NOTIFY_USERS }}
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: 'LivePing Bot: ${{ steps.bot.outputs.status == ''success'' && ''✅ Bought successfully'' || ''❌ Purchase failed'' }}'
-          to: ${{ secrets.MAIL_TO }}
-          from: LivePing Bot <${{ secrets.MAIL_USERNAME }}>
-          body: |
-            LivePing Bot Execution Report
-            =============================
-            
-            Status: ${{ steps.bot.outputs.status == 'success' && '✅ SUCCESS' || '❌ FAILED' }}
-            Message: ${{ steps.bot.outputs.message }}
-            
-            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
-            Bot Output Log:
-            ---------------
-            ${{ env.BOT_LOG }}
-          priority: high
+          script: |
+            const status = process.env.STATUS || 'unknown';
+            const message = process.env.MESSAGE || 'No message';
+            const log = process.env.BOT_LOG || 'No log output captured.';
+            const mentions = (process.env.NOTIFY_USERS || '').trim();
+
+            const title = `LivePing Bot: ${status === 'success' ? '✅ Bought successfully' : '❌ Purchase failed'}`;
+            const lines = [
+              'LivePing Bot Execution Report',
+              '=============================',
+              '',
+              `Status: ${status === 'success' ? '✅ SUCCESS' : '❌ FAILED'}`,
+              `Message: ${message}`,
+              '',
+              `Workflow Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              'Bot Output Log:',
+              '---------------',
+              log
+            ];
+
+            if (mentions) {
+              lines.push('', `Notify: ${mentions}`);
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: lines.join('\n')
+            });

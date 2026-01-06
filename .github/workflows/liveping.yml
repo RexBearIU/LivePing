@@ -81,20 +81,40 @@ jobs:
           fi
 
       - name: Send email notification
-        if: always() && steps.run-bot.outputs.last_status != '' && secrets.MAIL_USERNAME != '' && secrets.MAIL_PASSWORD != '' && secrets.MAIL_TO != ''
-        uses: dawidd6/action-send-mail@v3
+        if: always() && steps.run-bot.outputs.last_status != ''
+        uses: actions/github-script@v7
+        env:
+          LAST_STATUS: ${{ steps.run-bot.outputs.last_status }}
+          LAST_MESSAGE: ${{ steps.run-bot.outputs.last_message }}
+          TARGET_URL: ${{ inputs.target_url }}
+          START_TIME: ${{ inputs.start_time }}
+          NOTIFY_USERS: ${{ vars.NOTIFY_USERS }}
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: LivePing Bot: ${{ steps.run-bot.outputs.last_message }}
-          from: LivePing Bot <${{ secrets.MAIL_USERNAME }}>
-          to: ${{ secrets.MAIL_TO }}
-          body: |
-            LivePing Bot Execution Report
-            Status: ${{ steps.run-bot.outputs.last_status }}
-            Message: ${{ steps.run-bot.outputs.last_message }}
-            Target URL: ${{ inputs.target_url }}
-            Start Time: ${{ inputs.start_time }}
-            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          script: |
+            const status = process.env.LAST_STATUS || 'unknown';
+            const message = process.env.LAST_MESSAGE || 'No message';
+            const target = process.env.TARGET_URL || 'N/A';
+            const start = process.env.START_TIME || 'N/A';
+            const mentions = (process.env.NOTIFY_USERS || '').trim();
+
+            const title = `LivePing Bot: ${status === 'success' ? '✅ Success' : '❌ Failure'}`;
+            const lines = [
+              'LivePing Bot Execution Report',
+              '',
+              `Status: ${status}`,
+              `Message: ${message}`,
+              `Target URL: ${target}`,
+              `Start Time: ${start}`,
+              `Workflow Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            ];
+
+            if (mentions) {
+              lines.push('', `Notify: ${mentions}`);
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: lines.join('\n')
+            });
