@@ -61,7 +61,7 @@ jobs:
           
           start_time=$(date +%s)
           MAX_RUNTIME_SECONDS=600
-          SLEEP_SECONDS=300
+          SLEEP_DURATION_SECONDS=300
           deadline=$((start_time + MAX_RUNTIME_SECONDS))
           iteration=1
           success_iteration=""
@@ -69,6 +69,7 @@ jobs:
           runs=0
           MAIL_TO_VALUE=$MAIL_TO_DEFAULT
           
+          # Returns true when the provided value contains any non-whitespace characters.
           has_content() {
             local value="$1"
             value="${value#"${value%%[![:space:]]*}"}"
@@ -110,13 +111,13 @@ jobs:
             fi
             
             now=$(date +%s)
-            if [ $((now + SLEEP_SECONDS)) -ge "$deadline" ]; then
+            if [ $((now + SLEEP_DURATION_SECONDS)) -ge "$deadline" ]; then
               echo "Time limit reached or not enough time for another run. Stopping loop." | tee -a "$LOG_FILE"
               break
             fi
             
             echo "Sleeping 5 minutes before next attempt..." | tee -a "$LOG_FILE"
-            sleep "$SLEEP_SECONDS"
+            sleep "$SLEEP_DURATION_SECONDS"
             iteration=$((iteration + 1))
           done
           
@@ -130,12 +131,7 @@ jobs:
             final_exit=$last_exit
           fi
           
-          plural_suffix=""
-          if [ "$runs" -ne 1 ]; then
-            plural_suffix="s"
-          fi
-          
-          echo "Loop complete after $runs iteration${plural_suffix}. Final exit code: $final_exit" | tee -a "$LOG_FILE"
+          echo "Loop complete after $runs iteration$([ $runs -ne 1 ] && echo s). Final exit code: $final_exit" | tee -a "$LOG_FILE"
           
           echo "BOT_LOG<<EOF" >> "$GITHUB_ENV"
           cat "$LOG_FILE" >> "$GITHUB_ENV"
