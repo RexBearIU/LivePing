@@ -309,9 +309,9 @@ async function performCheckout(page: Page): Promise<boolean> {
       }
     }
     
-    // If we made it this far without errors, consider it a success
-    console.log('⚠️ No explicit checkout button found, but no errors occurred');
-    return true;
+    // If we made it this far without finding a checkout button, it's likely a failure
+    console.log('⚠️ No explicit checkout button found');
+    return false;
   } catch (error) {
     console.error('Checkout error:', error instanceof Error ? error.message : String(error));
     return false;

@@ -74,6 +74,8 @@ The GitHub Actions workflow runs:
 - **Every minute** via cron: `* * * * *`
 - **Manually** via workflow_dispatch (Actions tab → Run workflow)
 
+⚠️ **Note**: Running every minute may be aggressive for some event platforms. Consider adjusting to a more conservative schedule (e.g., every 5-10 minutes) to avoid rate limiting or IP blocking. See the Customization section below.
+
 ## Customization
 
 ### Modify the Bot Script
