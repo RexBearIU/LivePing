@@ -1,3 +1,4 @@
+import type { GenerativeModel } from '@google/generative-ai';
 import { Page } from 'playwright';
 
 export type SupportedAction = 'click' | 'type';
@@ -8,17 +9,27 @@ export interface AIInstruction {
   value?: string;
 }
 
-interface GeminiResponse {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-  }>;
-}
-
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-1.5-flash-latest';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_DOM_CHARS = 100_000;
 const MAX_SELECTOR_LENGTH = 500;
 const MAX_VALUE_LENGTH = 500;
+
+let googleGenAIModulePromise: Promise<typeof import('@google/generative-ai')> | undefined;
+const cachedModels = new Map<string, GenerativeModel>();
+
+async function getGeminiModel(apiKey: string): Promise<GenerativeModel> {
+  const cached = cachedModels.get(apiKey);
+  if (cached) {
+    return cached;
+  }
+
+  googleGenAIModulePromise ??= import('@google/generative-ai');
+
+  const { GoogleGenerativeAI } = await googleGenAIModulePromise;
+  const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: GEMINI_MODEL });
+  cachedModels.set(apiKey, model);
+  return model;
+}
 
 function extractJsonPayload(text: string): string | null {
   const trimmed = text.trim();
@@ -107,36 +118,42 @@ export async function requestGeminiActions(
     'If no meaningful action is possible, return an empty JSON array []'
   ].join('\n');
 
-  const response = await fetch(GEMINI_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: `${prompt}\n\nDOM (truncated if large):\n${domPayload}` },
-            { inline_data: { mime_type: 'image/png', data: screenshot.toString('base64') } }
-          ]
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
+  let model: GenerativeModel;
+  try {
+    model = await getGeminiModel(apiKey);
+  } catch (error) {
+    console.error('Failed to initialize Gemini SDK client:', error instanceof Error ? error.message : error);
     return [];
   }
 
-  const json = (await response.json()) as GeminiResponse;
-  const textResponse =
-    json?.candidates?.[0]?.content?.parts
-      ?.map((part: { text?: string }) => part?.text ?? '')
-      .join('')
-      .trim() ?? '';
+  let textResponse = '';
+  try {
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: `${prompt}\n\nDOM (truncated if large):\n${domPayload}` },
+            { inlineData: { mimeType: 'image/png', data: screenshot.toString('base64') } }
+          ]
+        }
+      ]
+    });
+    const response = result?.response;
+    if (!response) {
+      console.error('Gemini SDK returned an empty response.');
+      return [];
+    }
+    try {
+      textResponse = (await response.text())?.trim() ?? '';
+    } catch (error) {
+      console.error('Failed to read Gemini response text:', error instanceof Error ? error.message : error);
+      return [];
+    }
+  } catch (error) {
+    console.error('Gemini API error (SDK):', error instanceof Error ? error.message : error);
+    return [];
+  }
 
   if (!textResponse) {
     return [];
