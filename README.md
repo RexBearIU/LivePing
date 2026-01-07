@@ -33,6 +33,7 @@ Go to your repository settings → Secrets and variables → Actions, and add:
 #### Required Secrets:
 - `LOGIN_EMAIL`: Login email/username for the event platform
 - `LOGIN_PASSWORD`: Login password for the event platform
+- `GEMINI_API_KEY` (optional locally, recommended in CI): Google Gemini API key for AI-guided recovery when encountering CAPTCHAs or unexpected pages.
 
 #### Optional Notification Variable:
 - `NOTIFY_USERS` (Repository variable): Space-separated GitHub usernames or teams (e.g., `username1 username2 org/team-name`, rendered as `@username1 @username2 @org/team-name`).
@@ -69,6 +70,12 @@ npm run bot
 6. **Checkout**: Attempts to complete the checkout process
 7. **Result**: Logs "Bought successfully" or "Purchase failed"
 8. **Notify**: Creates a GitHub issue notification with the result (mentions `NOTIFY_USERS` if set)
+
+### Gemini-assisted recovery
+
+- The bot monitors its workflow (login → seat selection → checkout) and common CAPTCHA indicators.
+- When the current page does not match the expected workflow or a CAPTCHA is detected, it captures the DOM and screenshot, sends them to Gemini, and executes the returned JSON instructions (`click` / `type`) to move forward.
+- Set `GEMINI_API_KEY` to enable this behavior. Without it, the bot skips the Gemini step. You can override the model with `GEMINI_MODEL` and tweak the post-action pause with `AI_ACTION_DELAY_MS` (milliseconds).
 
 ## Workflow Trigger
 
