@@ -20,6 +20,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@playwright/test": "^1.49.1",
     "playwright": "^1.49.1",
     "tsx": "^4.19.2"
