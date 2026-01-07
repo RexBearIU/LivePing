@@ -14,16 +14,21 @@ const MAX_DOM_CHARS = 100_000;
 const MAX_SELECTOR_LENGTH = 500;
 const MAX_VALUE_LENGTH = 500;
 
-let cachedModel: GenerativeModel | null = null;
+let googleGenAIModulePromise: Promise<typeof import('@google/generative-ai')> | undefined;
+const cachedModels = new Map<string, GenerativeModel>();
 
 async function getGeminiModel(apiKey: string): Promise<GenerativeModel> {
-  if (cachedModel) {
-    return cachedModel;
+  const cached = cachedModels.get(apiKey);
+  if (cached) {
+    return cached;
   }
 
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  cachedModel = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: GEMINI_MODEL });
-  return cachedModel;
+  googleGenAIModulePromise ??= import('@google/generative-ai');
+
+  const { GoogleGenerativeAI } = await googleGenAIModulePromise;
+  const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: GEMINI_MODEL });
+  cachedModels.set(apiKey, model);
+  return model;
 }
 
 function extractJsonPayload(text: string): string | null {
@@ -134,7 +139,17 @@ export async function requestGeminiActions(
         }
       ]
     });
-    textResponse = result.response?.text().trim() ?? '';
+    const response = result?.response;
+    if (!response) {
+      console.error('Gemini SDK returned an empty response.');
+      return [];
+    }
+    try {
+      textResponse = (await response.text())?.trim() ?? '';
+    } catch (error) {
+      console.error('Failed to read Gemini response text:', error instanceof Error ? error.message : error);
+      return [];
+    }
   } catch (error) {
     console.error('Gemini API error (SDK):', error instanceof Error ? error.message : error);
     return [];
