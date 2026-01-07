@@ -1,8 +1,79 @@
-import { chromium, Browser } from 'playwright';
+import { chromium, Browser, Page } from 'playwright';
 import { getHelperForUrl } from './helpers/siteRouter';
 import { hasStartTimePassed } from './helpers/time';
+import { detectCaptcha, handleAIResponse, requestGeminiActions } from './helpers/gemini';
 
 const EXIT_CODE_START_TIME_NOT_REACHED = 3;
+
+function buildWorkflowAllowlist(targetUrl: string): string[] {
+  const normalizedTarget = targetUrl.toLowerCase();
+  let origin = normalizedTarget;
+  try {
+    origin = new URL(targetUrl).origin.toLowerCase();
+  } catch {
+    // If parsing fails, fall back to the raw target URL
+  }
+
+  const patterns = [
+    normalizedTarget,
+    origin,
+    `${origin}/login`,
+    `${origin}/signin`,
+    `${origin}/auth`,
+    `${origin}/account`,
+    `${origin}/seat`,
+    `${origin}/seats`,
+    `${origin}/ticket`,
+    `${origin}/tickets`,
+    `${origin}/cart`,
+    `${origin}/checkout`,
+    `${origin}/payment`,
+    `${origin}/confirm`,
+    `${origin}/order`
+  ];
+
+  const keywords = ['login', 'signin', 'auth', 'seat', 'ticket', 'checkout', 'payment', 'confirm', 'captcha'];
+  return Array.from(new Set([...patterns, ...keywords.map((k) => `${origin}/${k}`), ...keywords]));
+}
+
+function isAllowedWorkflowUrl(url: string, allowlist: string[]): boolean {
+  const current = url.toLowerCase();
+  return allowlist.some((allowed) => current.includes(allowed.toLowerCase()));
+}
+
+async function guardWithGemini(
+  page: Page,
+  allowlist: string[],
+  reason: string
+): Promise<void> {
+  const unexpectedUrl = !isAllowedWorkflowUrl(page.url(), allowlist);
+  const captchaDetected = await detectCaptcha(page);
+
+  if (!unexpectedUrl && !captchaDetected) {
+    return;
+  }
+
+  console.log(
+    unexpectedUrl
+      ? '⚠️ Page is outside expected workflow, requesting Gemini guidance...'
+      : '⚠️ Captcha detected, requesting Gemini guidance...'
+  );
+
+  const instructions = await requestGeminiActions(page, {
+    workflowUrls: allowlist,
+    reason: `${reason} - ${unexpectedUrl ? 'unexpected workflow URL' : 'captcha detected'}`
+  });
+
+  if (!instructions.length) {
+    console.log('ℹ️ No AI instructions received from Gemini.');
+    return;
+  }
+
+  const executed = await handleAIResponse(page, instructions);
+  if (executed) {
+    await page.waitForTimeout(500);
+  }
+}
 
 async function main() {
   let browser: Browser | null = null;
@@ -29,6 +100,7 @@ async function main() {
     }
 
     const helper = getHelperForUrl(TARGET_URL);
+    const workflowAllowlist = buildWorkflowAllowlist(TARGET_URL);
 
     console.log(`📍 Event URL: ${TARGET_URL}`);
     console.log(`🔧 Using helper: ${helper.name}`);
@@ -50,6 +122,7 @@ async function main() {
 
     console.log('🌐 Navigating to event page...');
     await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    await guardWithGemini(page, workflowAllowlist, 'After initial navigation');
 
     if (helper.prepare) {
       await helper.prepare(page, TARGET_URL);
@@ -63,25 +136,31 @@ async function main() {
     }
 
     console.log('✅ Login successful');
+    await guardWithGemini(page, workflowAllowlist, 'Post-login guard');
 
     if (page.url() !== TARGET_URL) {
       console.log('↩️ Returning to event page...');
       await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 30000 });
+      await guardWithGemini(page, workflowAllowlist, 'After returning to target');
     }
 
     console.log('🎫 Attempting to select seat...');
+    await guardWithGemini(page, workflowAllowlist, 'Before seat selection');
     const seatSelected = await helper.selectSeat(page);
 
     if (!seatSelected) {
+      await guardWithGemini(page, workflowAllowlist, 'Seat selection failed or blocked');
       throw new Error('No seats available or seat selection failed');
     }
 
     console.log('✅ Seat selected successfully');
 
     console.log('💳 Attempting checkout...');
+    await guardWithGemini(page, workflowAllowlist, 'Before checkout');
     const checkoutSuccess = await helper.checkout(page);
 
     if (!checkoutSuccess) {
+      await guardWithGemini(page, workflowAllowlist, 'Checkout failed or blocked');
       throw new Error('Checkout process failed');
     }
 
