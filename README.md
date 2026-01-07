@@ -75,7 +75,7 @@ npm run bot
 
 - The bot monitors its workflow (login → seat selection → checkout) and common CAPTCHA indicators.
 - When the current page does not match the expected workflow or a CAPTCHA is detected, it captures the DOM and screenshot, sends them to Gemini, and executes the returned JSON instructions (`click` / `type`) to move forward.
-- Set `GEMINI_API_KEY` to enable this behavior. Without it, the bot skips the Gemini step.
+- Set `GEMINI_API_KEY` to enable this behavior. Without it, the bot skips the Gemini step. You can override the model with `GEMINI_MODEL` and tweak the post-action pause with `AI_ACTION_DELAY_MS` (milliseconds).
 
 ## Workflow Trigger
 
