@@ -8,25 +8,43 @@ export interface AIInstruction {
   value?: string;
 }
 
-const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+}
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-1.5-flash-latest';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const MAX_DOM_CHARS = 100_000;
+const MAX_SELECTOR_LENGTH = 500;
+const MAX_VALUE_LENGTH = 500;
 
 function extractJsonPayload(text: string): string | null {
-  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i);
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```json\s*([\s\S]*?)\s*```/i);
   if (fenced && fenced[1]) {
     return fenced[1].trim();
   }
-  const bare = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return trimmed;
+  }
+
+  const bare = trimmed.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
   return bare ? bare[0].trim() : null;
 }
 
 function isValidInstruction(instruction: Partial<AIInstruction>): instruction is AIInstruction {
+  const selector = typeof instruction.selector === 'string' ? instruction.selector.trim() : '';
   return (
     !!instruction &&
     (instruction.action === 'click' || instruction.action === 'type') &&
-    typeof instruction.selector === 'string' &&
-    instruction.selector.trim().length > 0 &&
-    (instruction.action === 'click' || typeof instruction.value === 'string')
+    selector.length > 0 &&
+    selector.length <= MAX_SELECTOR_LENGTH &&
+    !selector.includes('\n') &&
+    (instruction.action === 'click' ||
+      (typeof instruction.value === 'string' && instruction.value.length <= MAX_VALUE_LENGTH))
   );
 }
 
@@ -62,14 +80,15 @@ export async function requestGeminiActions(
 ): Promise<AIInstruction[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn('⚠️ GEMINI_API_KEY not set; skipping Gemini assistance.');
+    console.warn('⚠️ GEMINI_API_KEY not set; skipping Gemini assistance. Set this env var to enable DOM/screenshot guidance.');
     return [];
   }
 
   const [domContent, screenshot] = await Promise.all([
     page.content(),
-    page.screenshot({ fullPage: true })
+    page.screenshot()
   ]);
+  const domPayload = domContent.length > MAX_DOM_CHARS ? domContent.slice(0, MAX_DOM_CHARS) : domContent;
 
   const workflowList = options.workflowUrls.join('\n- ');
   const prompt = [
@@ -80,7 +99,7 @@ export async function requestGeminiActions(
     'Expected workflow URLs or patterns:',
     `- ${workflowList}`,
     'Use the provided DOM and screenshot to decide the next action.',
-    'Respond with ONLY a JSON array (or a single JSON object) of instructions. No prose, no code fences.',
+    'Respond with ONLY a JSON array (or a single JSON object) of instructions. You may wrap the JSON in ```json``` fences if needed, but no additional prose.',
     'Each instruction must be one of:',
     '{"action":"click","selector":"<css selector>"}',
     '{"action":"type","selector":"<css selector>","value":"<text to enter>"}',
@@ -88,14 +107,17 @@ export async function requestGeminiActions(
     'If no meaningful action is possible, return an empty JSON array []'
   ].join('\n');
 
-  const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+  const response = await fetch(GEMINI_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey
+    },
     body: JSON.stringify({
       contents: [
         {
           parts: [
-            { text: `${prompt}\n\nDOM:\n${domContent}` },
+            { text: `${prompt}\n\nDOM (truncated if large):\n${domPayload}` },
             { inline_data: { mime_type: 'image/png', data: screenshot.toString('base64') } }
           ]
         }
@@ -109,7 +131,7 @@ export async function requestGeminiActions(
     return [];
   }
 
-  const json = (await response.json()) as any;
+  const json = (await response.json()) as GeminiResponse;
   const textResponse =
     json?.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part?.text ?? '')
@@ -150,20 +172,30 @@ export async function handleAIResponse(page: Page, instructions: AIInstruction[]
   let executed = false;
   for (const instruction of instructions) {
     try {
+      if (!isValidInstruction(instruction)) {
+        continue;
+      }
+      const selector = instruction.selector.trim();
+
       if (instruction.action === 'click') {
-        await page.locator(instruction.selector).first().click({ timeout: 5000 });
+        await page.locator(selector).first().click({ timeout: 5000 });
         executed = true;
         continue;
       }
 
       if (instruction.action === 'type' && typeof instruction.value === 'string') {
-        const input = page.locator(instruction.selector).first();
-        await input.fill(instruction.value);
+        const safeValue = instruction.value.slice(0, MAX_VALUE_LENGTH);
+        const input = page.locator(selector).first();
+        await input.fill(safeValue);
         executed = true;
       }
     } catch (error) {
+      const valueInfo =
+        instruction.action === 'type' && typeof instruction.value === 'string'
+          ? ` value="${instruction.value}"`
+          : '';
       console.warn(
-        `⚠️ Failed to execute AI instruction (${instruction.action} ${instruction.selector}):`,
+        `⚠️ Failed to execute AI instruction (${instruction.action} ${instruction.selector}${valueInfo}):`,
         error instanceof Error ? error.message : error
       );
       continue;
